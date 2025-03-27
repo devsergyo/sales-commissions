@@ -15,12 +15,14 @@ class Sale extends Model
     protected $fillable = [
         'seller_id',
         'amount',
+        'commission',
         'sale_date'
     ];
     
     protected $casts = [
         'sale_date' => 'date',
-        'amount' => 'decimal:2'
+        'amount' => 'decimal:2',
+        'commission' => 'decimal:2'
     ];
     
     /**

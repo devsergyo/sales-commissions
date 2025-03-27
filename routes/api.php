@@ -14,8 +14,10 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('sellers')->group(function () {
     Route::get('/', \App\Http\Controllers\Seller\ListController::class);
     Route::post('/store', \App\Http\Controllers\Seller\StoreController::class);
+    Route::get('/{seller}/sales', \App\Http\Controllers\Sales\ListBySeller::class);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('sales')->group(function () {
+    Route::get('/', \App\Http\Controllers\Sales\ListController::class);
     Route::post('/create', \App\Http\Controllers\Sales\CreateController::class);
 });
