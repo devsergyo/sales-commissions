@@ -15,3 +15,7 @@ Route::middleware(['auth:sanctum'])->prefix('sellers')->group(function () {
     Route::get('/', \App\Http\Controllers\Seller\ListController::class);
     Route::post('/store', \App\Http\Controllers\Seller\StoreController::class);
 });
+
+Route::middleware(['auth:sanctum'])->prefix('sales')->group(function () {
+    Route::post('/create', \App\Http\Controllers\Sales\CreateController::class);
+});
