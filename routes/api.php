@@ -10,3 +10,8 @@ Route::prefix('auth')->group(function () {
         Route::post('/logout', \App\Http\Controllers\Auth\LogoutController::class);
     });
 });
+
+Route::middleware(['auth:sanctum'])->prefix('sellers')->group(function () {
+    Route::get('/', \App\Http\Controllers\Seller\ListController::class);
+    Route::post('/store', \App\Http\Controllers\Seller\StoreController::class);
+});
