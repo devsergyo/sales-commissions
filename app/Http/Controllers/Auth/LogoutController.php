@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
-class LoginController extends Controller
+class LogoutController extends Controller
 {
     private AuthService $authService;
 
@@ -16,8 +16,8 @@ class LoginController extends Controller
         $this->authService = $authService;
     }
 
-    public function __invoke(LoginRequest $request): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
-        return $this->authService->login($request->validated());
+        return $this->authService->logout($request);
     }
 }

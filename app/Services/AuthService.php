@@ -41,8 +41,25 @@ class AuthService
                 'token' => $token
             ], 'Login realizado com sucesso');
         } catch (\Exception $exception) {
-            dd($exception);
             return $this->errorResponse('Erro ao realizar login', $exception->getCode(), $exception->errors());
         }
     }
+
+    public function logout(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return $this->errorResponse('Usuário não autenticado.', 401);
+            }
+
+            $request->user()->currentAccessToken()->delete();
+            return $this->successResponse([], 'Logout realizado com sucesso');
+        } catch (\Exception $exception) {
+            return $this->errorResponse('Erro ao realizar logout', $exception->getCode(), $exception->errors());
+        }
+    }
+
+
 }
