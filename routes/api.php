@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -14,7 +13,6 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('sellers')->group(function () {
     Route::get('/', \App\Http\Controllers\Seller\ListController::class);
     Route::post('/store', \App\Http\Controllers\Seller\StoreController::class);
-    Route::get('/{seller}/sales', \App\Http\Controllers\Sales\ListBySeller::class);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('sales')->group(function () {
