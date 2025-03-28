@@ -2,10 +2,16 @@
 
 namespace App\Http\Requests\Sales;
 
+use App\Traits\ApiResponseTrait;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class CreateSaleRequest extends FormRequest
 {
+
+    use ApiResponseTrait;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -45,5 +51,12 @@ class CreateSaleRequest extends FormRequest
             'sale_date.date' => 'A data da venda deve ser uma data válida',
             'sale_date.before_or_equal' => 'A data da venda não pode ser futura'
         ];
+    }
+
+    protected function failedValidation(Validator $validator)
+    {
+        throw new HttpResponseException(
+            $this->errorResponse("Erro de validação", 422, $validator->errors())
+        );
     }
 }
