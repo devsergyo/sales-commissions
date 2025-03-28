@@ -21,3 +21,8 @@ Route::middleware(['auth:sanctum'])->prefix('sales')->group(function () {
     Route::get('/', \App\Http\Controllers\Sales\ListController::class);
     Route::post('/create', \App\Http\Controllers\Sales\CreateController::class);
 });
+
+Route::middleware(['auth:sanctum'])->prefix('reports')->group(function () {
+    Route::post('/{seller}/send-daily-report', \App\Http\Controllers\Reports\SendDailyReportController::class);
+    Route::post('/send-daily-reports', \App\Http\Controllers\Reports\SendDailyReportController::class);
+});
