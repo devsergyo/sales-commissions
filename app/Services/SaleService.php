@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Sale;
 use App\Repositories\Interfaces\SaleRepositoryInterface;
 use App\Traits\ApiResponseTrait;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
@@ -14,6 +16,11 @@ class SaleService
      * Commission rate for sales (8.5%).
      */
     const COMMISSION_RATE = 0.085;
+    
+    /**
+     * Tempo de cache em minutos
+     */
+    const CACHE_TIME = 60;
     
     /**
      * @var SaleRepositoryInterface
@@ -49,11 +56,15 @@ class SaleService
     public function all()
     {
         try {
-            $sales = $this->saleRepository->all();
-            
-            $salesWithCommission = $sales->map(function ($sale) {
-                $sale->commission = $this->calculateCommission($sale->amount);
-                return $sale;
+            // Usar cache para melhorar o desempenho
+            $cacheKey = 'all_sales';
+            $salesWithCommission = Cache::remember($cacheKey, self::CACHE_TIME, function () {
+                $sales = $this->saleRepository->all();
+                
+                return $sales->map(function ($sale) {
+                    $sale->commission = $this->calculateCommission($sale->amount);
+                    return $sale;
+                });
             });
 
             return $this->successResponse([
@@ -73,11 +84,15 @@ class SaleService
     public function getBySeller(int $sellerId)
     {
         try {
-            $sales = $this->saleRepository->getBySeller($sellerId);
-            
-            $salesWithCommission = $sales->map(function ($sale) {
-                $sale->commission = $this->calculateCommission($sale->amount);
-                return $sale;
+            // Usar cache para melhorar o desempenho
+            $cacheKey = 'seller_sales_' . $sellerId;
+            $salesWithCommission = Cache::remember($cacheKey, self::CACHE_TIME, function () use ($sellerId) {
+                $sales = $this->saleRepository->getBySeller($sellerId);
+                
+                return $sales->map(function ($sale) {
+                    $sale->commission = $this->calculateCommission($sale->amount);
+                    return $sale;
+                });
             });
 
             return $this->successResponse([
@@ -99,6 +114,37 @@ class SaleService
         // Calcular a comissão antes de criar a venda
         $data['commission'] = $this->calculateCommission($data['amount']);
         
-        return $this->saleRepository->create($data);
+        // Usar transação para garantir a integridade dos dados
+        DB::beginTransaction();
+        
+        try {
+            $sale = $this->saleRepository->create($data);
+            
+            // Invalidar caches relacionados
+            $this->invalidateRelatedCaches($data['seller_id'] ?? null);
+            
+            DB::commit();
+            return $sale;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+    
+    /**
+     * Invalida os caches relacionados às vendas após uma nova venda ser criada.
+     *
+     * @param int|null $sellerId
+     * @return void
+     */
+    protected function invalidateRelatedCaches(?int $sellerId = null): void
+    {
+        // Invalidar cache de todas as vendas
+        Cache::forget('all_sales');
+        
+        // Se um vendedor específico foi fornecido, invalidar seu cache
+        if ($sellerId) {
+            Cache::forget('seller_sales_' . $sellerId);
+        }
     }
 }

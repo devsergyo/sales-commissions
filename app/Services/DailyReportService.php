@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendEmailJob;
 use App\Mail\AdminDailySalesReport;
 use App\Mail\DailySalesReport;
 use App\Repositories\Interfaces\SaleRepositoryInterface;
@@ -10,6 +11,7 @@ use App\Repositories\Interfaces\UserRepositoryInterface;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class DailyReportService
 {
@@ -27,6 +29,11 @@ class DailyReportService
      * @var UserRepositoryInterface
      */
     protected $userRepository;
+
+    /**
+     * Cache time in minutes
+     */
+    const CACHE_TIME = 60;
 
     /**
      * DailyReportService constructor.
@@ -133,29 +140,59 @@ class DailyReportService
             'errors' => [],
         ];
 
-        $sellers = $this->sellerRepository->all();
+        // Usar cache para a lista de vendedores para reduzir consultas ao banco
+        $cacheKey = 'sellers_list';
+        $sellers = Cache::remember($cacheKey, self::CACHE_TIME, function () {
+            return $this->sellerRepository->all();
+        });
+        
         $results['total_sellers'] = count($sellers);
         
+        // Obter todas as vendas da data do relatório de uma vez só
+        $allSalesForDate = $this->saleRepository->getByDate($reportDate);
+        $salesBySellerMap = $allSalesForDate->groupBy('seller_id');
+        
         foreach ($sellers as $seller) {
-            $result = $this->sendDailyReportToSeller($seller->id, $reportDate);
+            $sellerSales = $salesBySellerMap->get($seller->id) ?? collect([]);
             
-            if (!$result['has_sales']) {
+            if ($sellerSales->isEmpty()) {
                 $results['sellers_without_sales']++;
                 continue;
             }
             
-            if ($result['success']) {
+            $totalSales = $sellerSales->count();
+            $totalAmount = $sellerSales->sum('amount');
+            $totalCommission = $sellerSales->sum('commission');
+            
+            $salesData = [
+                'total_sales' => $totalSales,
+                'total_amount' => $totalAmount,
+                'total_commission' => $totalCommission,
+                'sales' => $sellerSales
+            ];
+
+            try {
+                // Criar o e-mail e enviá-lo através do job
+                $email = new DailySalesReport($seller, $salesData, $formattedDate);
+                SendEmailJob::dispatch($seller->email, $email);
+                
                 $results['total_reports_sent']++;
-            } else {
+            } catch (\Exception $e) {
+                Log::error('Erro ao enfileirar e-mail para vendedor: ' . $e->getMessage(), [
+                    'seller_id' => $seller->id,
+                    'email' => $seller->email,
+                    'date' => $formattedDate
+                ]);
+                
                 $results['errors'][] = [
                     'seller_id' => $seller->id,
                     'email' => $seller->email,
-                    'error' => $result['error']
+                    'error' => $e->getMessage()
                 ];
             }
         }
         
-        $this->sendDailyReportToAdmin($reportDate);
+        $this->sendDailyReportToAdmin($reportDate, $allSalesForDate, $sellers);
         
         return $results;
     }
@@ -185,8 +222,11 @@ class DailyReportService
             ];
         }
         
-        // Obter as vendas do vendedor para a data do relatório
-        $sales = $this->saleRepository->getBySellerAndDate($sellerId, $reportDate);
+        // Usar cache para reduzir consultas repetidas
+        $cacheKey = 'seller_sales_' . $sellerId . '_' . $reportDate->format('Y-m-d');
+        $sales = Cache::remember($cacheKey, self::CACHE_TIME, function () use ($sellerId, $reportDate) {
+            return $this->saleRepository->getBySellerAndDate($sellerId, $reportDate);
+        });
         
         $result = [
             'seller_id' => $sellerId,
@@ -213,9 +253,18 @@ class DailyReportService
         ];
 
         try {
-            Mail::to($seller->email)->send(new DailySalesReport($seller, $salesData, $formattedDate));
+            // Criar o e-mail e enviá-lo através do job
+            $email = new DailySalesReport($seller, $salesData, $formattedDate);
+            SendEmailJob::dispatch($seller->email, $email);
+            
             $result['success'] = true;
         } catch (\Exception $e) {
+            Log::error('Erro ao enfileirar e-mail para vendedor: ' . $e->getMessage(), [
+                'seller_id' => $sellerId,
+                'email' => $seller->email,
+                'date' => $formattedDate
+            ]);
+            
             $result['error'] = $e->getMessage();
         }
         
@@ -226,9 +275,11 @@ class DailyReportService
      * Envia um e-mail para o administrador contendo a soma de todas as vendas efetuadas no dia.
      *
      * @param Carbon|null $date
+     * @param \Illuminate\Support\Collection|null $allSales Coleção de vendas pré-carregada (opcional)
+     * @param \Illuminate\Support\Collection|null $sellers Coleção de vendedores pré-carregada (opcional)
      * @return array
      */
-    public function sendDailyReportToAdmin(?Carbon $date = null): array
+    public function sendDailyReportToAdmin(?Carbon $date = null, $allSales = null, $sellers = null): array
     {
         $reportDate = $date ?? Carbon::today();
         $formattedDate = $reportDate->format('d/m/Y');
@@ -245,27 +296,49 @@ class DailyReportService
         ];
         
         try {
-            // Obter todas as vendas da data do relatório
-            $allSales = $this->saleRepository->getAllByDate($reportDate);
+            // Obter o e-mail do administrador (primeiro usuário)
+            $adminUser = $this->userRepository->all()->first();
+            
+            if (!$adminUser) {
+                throw new \Exception('Usuário administrador não encontrado.');
+            }
+            
+            $adminEmail = $adminUser->email;
+            
+            // Se não foi fornecida uma coleção de vendas, buscar do banco
+            if ($allSales === null) {
+                // Usar cache para reduzir consultas repetidas
+                $cacheKey = 'all_sales_' . $reportDate->format('Y-m-d');
+                $allSales = Cache::remember($cacheKey, self::CACHE_TIME, function () use ($reportDate) {
+                    return $this->saleRepository->getAllByDate($reportDate);
+                });
+            }
             
             // Calcular totais
             $totalSales = $allSales->count();
             $totalAmount = $allSales->sum('amount');
             $totalCommission = $allSales->sum('commission');
             
-            // Obter todos os vendedores
-            $sellers = $this->sellerRepository->all();
+            // Obter todos os vendedores se não foram fornecidos
+            if ($sellers === null) {
+                $cacheKey = 'sellers_list';
+                $sellers = Cache::remember($cacheKey, self::CACHE_TIME, function () {
+                    return $this->sellerRepository->all();
+                });
+            }
+            
             $totalSellers = count($sellers);
             
             // Calcular vendedores com vendas
             $sellerIds = $allSales->pluck('seller_id')->unique()->count();
             
-            // Obter top 5 vendedores
+            // Obter top 5 vendedores de forma otimizada
             $topSellers = [];
             $salesBySeller = $allSales->groupBy('seller_id');
+            $sellerMap = $sellers->keyBy('id');
             
             foreach ($salesBySeller as $sellerId => $sales) {
-                $seller = $this->sellerRepository->find($sellerId);
+                $seller = $sellerMap->get($sellerId);
                 if (!$seller) continue;
                 
                 $topSellers[] = [
@@ -300,24 +373,14 @@ class DailyReportService
             $result['total_sellers'] = $totalSellers;
             $result['sellers_with_sales'] = $sellerIds;
             
-            // Obter o e-mail do administrador a partir do primeiro usuário do sistema
-            // Assumindo que o primeiro usuário é o administrador
-            $adminEmail = 'admin@example.com';
+            // Criar o e-mail e enviá-lo através do job
+            $email = new AdminDailySalesReport($salesData, $formattedDate);
+            SendEmailJob::dispatch($adminEmail, $email);
             
-            try {
-                $users = $this->userRepository->all();
-                if ($users && $users->isNotEmpty()) {
-                    $adminEmail = $users->first()->email;
-                }
-            } catch (\Exception $e) {
-                Log::warning('Não foi possível obter o e-mail do administrador: ' . $e->getMessage());
-            }
-            
-            Mail::to($adminEmail)->send(new AdminDailySalesReport($salesData, $formattedDate));
             $result['success'] = true;
         } catch (\Exception $e) {
+            Log::error('Erro ao enfileirar relatório para o administrador: ' . $e->getMessage());
             $result['error'] = $e->getMessage();
-            Log::error('Erro ao gerar ou enviar relatório para o administrador: ' . $e->getMessage());
         }
         
         return $result;
