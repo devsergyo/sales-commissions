@@ -11,8 +11,8 @@
 ### 1. Clone o Repositório
 
 ```bash
-git clone [URL_DO_REPOSITÓRIO]
-cd sales-commission-2
+git clone https://github.com/devsergyo/sales-commissions.git
+cd sales-commissions
 ```
 
 ### 2. Configuração do Ambiente
@@ -147,6 +147,26 @@ docker-compose exec app composer [comando]
 
 ```bash
 docker-compose exec db mysql -u user -p
+```
+
+
+## Processamento de Emails
+
+Para iniciar o processamento de emails em fila, execute:
+
+```bash
+docker-compose exec app php artisan queue:process-emails
+```
+
+Este comando irá:
+- Processar todos os emails pendentes na fila
+- Enviar relatórios de comissões para os vendedores
+- Exibir o status do processamento no console
+
+Para manter o processamento de emails rodando continuamente em background, você pode usar:
+
+```bash
+docker-compose exec -d app php artisan queue:process-emails
 ```
 
 ## Estrutura do Projeto
