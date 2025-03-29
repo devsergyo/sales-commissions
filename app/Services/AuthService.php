@@ -38,6 +38,9 @@ class AuthService
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return $this->successResponse([
+                "id"=> $user->id,
+                "name"=> "{$user->name} {$user->last_name}",
+                "email"=> $user->email,
                 'token' => $token
             ], 'Login realizado com sucesso');
         } catch (\Exception $exception) {

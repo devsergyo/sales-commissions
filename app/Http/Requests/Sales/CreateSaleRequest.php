@@ -33,26 +33,7 @@ class CreateSaleRequest extends FormRequest
             'sale_date' => ['required', 'date', 'before_or_equal:today']
         ];
     }
-
-    /**
-     * Get custom messages for validator errors.
-     *
-     * @return array<string, string>
-     */
-    public function messages(): array
-    {
-        return [
-            'seller_id.required' => 'O vendedor é obrigatório',
-            'seller_id.exists' => 'O vendedor selecionado não existe',
-            'amount.required' => 'O valor da venda é obrigatório',
-            'amount.numeric' => 'O valor da venda deve ser um número',
-            'amount.min' => 'O valor da venda deve ser maior que zero',
-            'sale_date.required' => 'A data da venda é obrigatória',
-            'sale_date.date' => 'A data da venda deve ser uma data válida',
-            'sale_date.before_or_equal' => 'A data da venda não pode ser futura'
-        ];
-    }
-
+    
     protected function failedValidation(Validator $validator)
     {
         throw new HttpResponseException(

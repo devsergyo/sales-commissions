@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Sale;
 use App\Repositories\Interfaces\SaleRepositoryInterface;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Support\Facades\Cache;
@@ -11,17 +10,17 @@ use Illuminate\Support\Facades\DB;
 class SaleService
 {
     use ApiResponseTrait;
-    
+
     /**
      * Commission rate for sales (8.5%).
      */
     const COMMISSION_RATE = 0.085;
-    
+
     /**
      * Tempo de cache em minutos
      */
     const CACHE_TIME = 60;
-    
+
     /**
      * @var SaleRepositoryInterface
      */
@@ -60,7 +59,7 @@ class SaleService
             $cacheKey = 'all_sales';
             $salesWithCommission = Cache::remember($cacheKey, self::CACHE_TIME, function () {
                 $sales = $this->saleRepository->all();
-                
+
                 return $sales->map(function ($sale) {
                     $sale->commission = $this->calculateCommission($sale->amount);
                     return $sale;
@@ -88,7 +87,7 @@ class SaleService
             $cacheKey = 'seller_sales_' . $sellerId;
             $salesWithCommission = Cache::remember($cacheKey, self::CACHE_TIME, function () use ($sellerId) {
                 $sales = $this->saleRepository->getBySeller($sellerId);
-                
+
                 return $sales->map(function ($sale) {
                     $sale->commission = $this->calculateCommission($sale->amount);
                     return $sale;
@@ -107,30 +106,34 @@ class SaleService
      * Create a new sale.
      *
      * @param array $data
-     * @return Sale
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function create(array $data): Sale
+    public function create(array $data)
     {
         // Calcular a comissão antes de criar a venda
         $data['commission'] = $this->calculateCommission($data['amount']);
-        
+
         // Usar transação para garantir a integridade dos dados
         DB::beginTransaction();
-        
+
         try {
             $sale = $this->saleRepository->create($data);
-            
+
             // Invalidar caches relacionados
             $this->invalidateRelatedCaches($data['seller_id'] ?? null);
-            
+
             DB::commit();
-            return $sale;
+
+            return $this->successResponse([
+                'sale' => $sale
+            ], 'Vendas cadastrada com sucesso com sucesso.');
+
         } catch (\Exception $e) {
             DB::rollBack();
-            throw $e;
+            return $this->errorResponse('Erro ao cadastrar a venda.', 500, $e->getMessage());
         }
     }
-    
+
     /**
      * Invalida os caches relacionados às vendas após uma nova venda ser criada.
      *
@@ -141,7 +144,7 @@ class SaleService
     {
         // Invalidar cache de todas as vendas
         Cache::forget('all_sales');
-        
+
         // Se um vendedor específico foi fornecido, invalidar seu cache
         if ($sellerId) {
             Cache::forget('seller_sales_' . $sellerId);
