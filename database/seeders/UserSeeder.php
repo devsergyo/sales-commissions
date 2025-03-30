@@ -23,9 +23,9 @@ class UserSeeder extends Seeder
     public function run()
     {
         $this->userRepository->create([
-            'name' => 'John Testador',
-            'email' => 'testapi@tray.com.br',
-            'password' => Hash::make('password'),
+            'name' => env('USER_NAME_ROOT','Joscrino Testador'),
+            'email' => env('USER_EMAIL_ROOT','teste@testcompany.com.br'),
+            'password' => Hash::make(env('USER_PASSWORD_ROOT','password')),
             'email_verified_at' => now()
         ]);
     }

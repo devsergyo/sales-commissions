@@ -14,32 +14,21 @@
 git clone https://github.com/devsergyo/sales-commissions.git
 cd sales-commissions
 ```
-
-### 2. Configuração do Ambiente
-
-#### Construir e Iniciar os Containers
+#### Copiar o arquivo .env.example para .env
 
 ```bash
-docker-compose build
-docker-compose up -d
+cp .env.example .env
 ```
+#### Configurar o usuário padrão
+    - No seu arquivo .env há dois parâmetros que deverão ser configurados para que utilize o painel administrativo:
+      - USER_NAME_ROOT=(deverá ser o nome completo do admin)
+      - USER_MAIL_ROOT=(deverá ser o e-mail válido do admin) 
+      - USER_PASSWORD_ROOT=(deverá ser uma senha forte)
 
-Este comando irá criar e iniciar os seguintes containers:
-- `php_app`: Backend Laravel (PHP 8.4)
-- `mysql_db`: Banco de dados MySQL
-- `redis_cache`: Redis para cache
-- `nginx_server`: Servidor web Nginx
-- `vue_frontend`: Frontend Vue.js
-
-### 3. Configuração do Backend (Laravel)
-
-#### Instalar Dependências e Configurar o .env
-
-```bash
-docker-compose exec app composer install
-docker-compose exec app cp .env.example .env
-docker-compose exec app php artisan key:generate
-```
+    - Caso nenhum seja informado irá ser o padrão
+        Nome: Joscrino Testador
+        E-mail: teste@testcompany.com.br
+        Senha: password
 
 #### Configurar o Banco de Dados
 
@@ -54,11 +43,58 @@ DB_USERNAME=user
 DB_PASSWORD=password
 ```
 
+### 2. Configuração do Ambiente
+
+#### Construir e Iniciar os Containers
+
+```bash
+docker-compose build
+docker-compose up -d
+```
+
+### 3. Configuração do Backend (Laravel)
+
+#### Instalar Dependências e Configurar o .env
+
+```bash
+docker-compose exec app composer install
+docker-compose exec app php artisan key:generate
+```
+
+### 4. Executar testes do backend:
+
+```bash
+docker-compose exec app php artisan test --testsuite=Feature
+```
+
+
+Este comando irá criar e iniciar os seguintes containers:
+- `php_app`: Backend Laravel (PHP 8.4)
+- `mysql_db`: Banco de dados MySQL
+- `redis_cache`: Redis para cache
+- `nginx_server`: Servidor web Nginx
+- `vue_frontend`: Frontend Vue.js
+
 #### Executar as Migrations
 
 ```bash
 docker-compose exec app php artisan migrate
 ```
+
+#### Populando banco de dados:
+
+Você poderá utilizar o comando abaixo para popular o banco de dados com dados de exemplo:
+
+```bash
+docker-compose exec app php artisan db:seed
+```
+
+Ou caso queira apenas os dados de usuário do sistema:
+
+```bash
+docker-compose exec app php artisan db:seed --class=UserSeeder
+```
+
 
 ### 4. Configuração do Frontend (Vue.js)
 

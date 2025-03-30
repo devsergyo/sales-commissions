@@ -126,7 +126,7 @@ class SaleService
 
             return $this->successResponse([
                 'sale' => $sale
-            ], 'Vendas cadastrada com sucesso com sucesso.');
+            ], 'Vendas cadastrada com sucesso com sucesso.', 201);
 
         } catch (\Exception $e) {
             DB::rollBack();

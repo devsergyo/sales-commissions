@@ -15,6 +15,11 @@ services:
         depends_on:
             - db
             - redis
+        links:
+            - db:db
+            - db:localhost
+            - db:127.0.0.1
+        command: bash -c "chmod -R 777 /var/www/storage && php-fpm"
 
     db:
         image: mysql:8.0
@@ -25,12 +30,15 @@ services:
             MYSQL_DATABASE: app_db
             MYSQL_USER: user
             MYSQL_PASSWORD: password
+            MYSQL_ROOT_HOST: "%"  
         ports:
             - "3306:3306"
         volumes:
             - mysql_data:/var/lib/mysql
+            - ./docker/mysql/init:/docker-entrypoint-initdb.d
         networks:
             - app_network
+        command: --default-authentication-plugin=mysql_native_password
 
     redis:
         image: redis:latest
@@ -70,6 +78,10 @@ services:
 networks:
     app_network:
         driver: bridge
+        ipam:
+            driver: default
+            config:
+                - subnet: 172.18.0.0/16
 
 volumes:
     mysql_data:
